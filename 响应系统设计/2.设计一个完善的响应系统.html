@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>2.设计一个完善的响应系统</title>
+</head>
+
+<body>
+    <script>
+        /**
+         * 针对上一节中的问题：
+         * 1. effect函数名写死不够灵活，如果是匿名函数那就获取不到函数名
+         * 2. 没有在副作用与目标字段建立联系，比如上一节中定时器里边如果设置了不是text，而是一个obj中没有的属性 那么副作用函数还是会调用一次。
+         */
+
+        let activeEffect;
+        // 封装一个注册副作用函数的函数，里边将副作用函数统一赋值给全局变量activeEffect,并执行副作用函数
+        function createEffect(fn) {
+            activeEffect = fn;
+            fn();
+        }
+
+        // 针对上边的第二点，所以我们不能使用new Set()这种数据结构去存储应该用一下这种数据结构，副作用函数应该对应到每个属性上
+        /**
+         *  data
+         *      -text
+         *          - effect1
+         *      -msg
+         *          - effect2
+         *  data1
+         *      -text1
+         *          - effect1
+         *      -msg1
+         *          - effect2
+         *
+         *
+         *
+         */
+        // new WeakMap([
+        //         [
+        //             data,
+        //             new Map([
+        //                 [text, new Set([effect1])],
+        //                 [msg, new Set([effect2])],
+        //             ]),
+        //         ],
+        //         [
+        //             data1,
+        //             new Map([
+        //                 [text1, new Set([effect1])],
+        //                 [msg1, new Set([effect2])],
+        //             ]),
+        //         ],
+        //     ]);
+
+        const bucket = new WeakMap();
+
+        const data = { text: "hello world" };
+
+        const obj = new Proxy(data, {
+            get(target, key) {
+                if (!activeEffect) return;
+                let depsMap = bucket.get(target);
+                if (!depsMap) {
+                    bucket.set(target, (depsMap = new Map()));
+                }
+                let deps = depsMap.get(key);
+                if (!deps) {
+                    depsMap.set(key, (deps = new Set()));
+                }
+                deps.add(activeEffect);
+                return target[key];
+            },
+            set(target, key, newVal) {
+                target[key] = newVal;
+                const depsMap = bucket.get(target);
+                if (!depsMap) return;
+                const effects = depsMap.get(key);
+                effects && effects.forEach((fn) => fn());
+            },
+        });
+
+        createEffect(() => {
+            console.log("副作用函数执行了");
+            debugger
+            document.body.innerText = obj.text;
+        });
+
+        setTimeout(() => {
+            obj.msg = "哇喔";
+            obj.text = "hello vue"
+            console.log(bucket)
+        });
+    </script>
+</body>
+
+</html>

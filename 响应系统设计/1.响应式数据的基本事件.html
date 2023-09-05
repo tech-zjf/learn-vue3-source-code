@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>1.响应式数据的基本事件</title>
+</head>
+<body>
+  <script>
+    const bucket = new Set();
+
+    const data = { text: "hello world" };
+
+    const obj = new Proxy(data, {
+      get(target, key) {
+        bucket.add(effect);
+        return target[key];
+      },
+      set(target, key, newVal) {
+        target[key] = newVal;
+        bucket.forEach((fn) => fn());
+      },
+    });
+
+    function effect() {
+      document.body.innerText  = obj.text
+    }
+    // 触发读取
+    effect()
+    
+    // 2，秒后修改响应式数据
+    setTimeout(()=>{
+      obj.text = "hello vue"
+    },2000)
+
+
+    /**
+     *  总结： 以上基本实现了一个简单的响应式数据，在我们修改数据时页面能实时改变，但是还有很多问题，比如，这块的effect的名字写死了 不灵活，
+    */
+  </script>
+</body>
+</html>
