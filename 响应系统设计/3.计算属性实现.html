@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+
+<body>
+    <script>
+        const data = {
+            name: '啊锋',
+            msg: '写代码'
+        }
+
+        const obj = new Proxy(data, {
+            get(target, key) {
+                track(target, key)
+                return target[key]
+            },
+            set(target, key, newVal) {
+                target[key] = newVal
+                trigger(target, key)
+            }
+        })
+
+        const bucket = new WeakMap()
+
+        function track(target, key) {
+            if (!activeEffect) return
+            let targetMap = bucket.get(target)
+            if (!targetMap) {
+                bucket.set(target, (targetMap = new Map()))
+            }
+            let deps = targetMap.get(key)
+            if (!deps) {
+                targetMap.set(key, (deps = new Set()))
+            }
+            deps.add(activeEffect)
+            activeEffect.deps.push(deps)
+        }
+
+        function trigger(target, key) {
+            const targetMap = bucket.get(target)
+            if (!targetMap) return
+            const deps = targetMap.get(key)
+            let cloneDeps = new Set()
+            deps.forEach(effect => {
+                if (effect !== activeEffect) {
+                    cloneDeps.add(effect)
+                }
+            })
+            cloneDeps && cloneDeps.forEach(effect => {
+                if (effect.options.scheduler) {
+                    effect.options.scheduler(effect)
+                } else {
+                    effect()
+                }
+            })
+        }
+
+        let activeEffect
+        let effectStack = []
+
+        function createEffect(fn, options = {}) {
+            const effectFn = () => {
+                cleanup(effectFn)
+                activeEffect = effectFn
+                effectStack.push(effectFn)
+                const res = fn()
+                effectStack.pop()
+                activeEffect = effectStack[effectStack.length - 1]
+                return res
+            }
+            effectFn.deps = []
+            effectFn.options = options
+            if (!options.lazy) {
+                effectFn()
+            }
+            return effectFn
+        }
+
+        function cleanup(effectFn) {
+            effectFn.deps.forEach(deps => {
+                deps.delete(effectFn)
+            })
+            effectFn.deps.length = 0
+        }
+
+        function computed(fn) {
+            let value
+            let dirty = true
+
+            const getter = createEffect(fn, {
+                lazy: true,
+                scheduler() {
+                    if (!dirty) {
+                        dirty = true
+                        trigger(computedValue, "value")
+                    }
+                }
+            })
+
+            const computedValue = {
+                get value() {
+                    if (dirty) {
+                        value = getter()
+                        dirty = false
+                    }
+                    track(computedValue, "value")
+                    return value
+                }
+            }
+            return computedValue
+        }
+
+        const sumRes = computed(() => obj.name + obj.msg)
+
+        console.log(sumRes.value)
+        console.log(sumRes.value)
+
+        
+        createEffect(() => {
+            document.body.innerText = sumRes.value
+        })
+
+        setTimeout(() => {
+            obj.msg = "打游戏"
+        },3000)
+    </script>
+</body>
+
+</html>
