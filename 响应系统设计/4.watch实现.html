@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <script>
+        const data = {name:'阿锋'}
+        const obj = new Proxy(data,{
+            get(target,key){
+                track(target,key)
+                return target[key]
+            },
+            set(target,key,newVal){
+                target[key] = newVal
+                trigger(target,key)
+            }
+        })
+        
+        let bucket = new WeakMap()
+        function track(target,key) {
+            if(!activeEffect)return
+            let targetMap = bucket.get(target)
+            if(!targetMap){
+                bucket.set(target,(targetMap = new Map()))
+            }
+            let deps = targetMap.get(key)
+            if(!deps){
+                targetMap.set(key,(deps = new Set()))
+            }
+            deps.add(activeEffect)
+            activeEffect.deps.push(deps)
+        }
+
+        function trigger(target,key){   
+            const targetMap = bucket.get(target)
+            if(!targetMap) return
+            const effects = targetMap.get(key)
+            const cloneDeps = new Set()
+            effects.forEach(effect=>{
+                if(effect!==activeEffect){
+                    cloneDeps.add(effect)
+                }
+            })
+            cloneDeps.forEach(effect => {
+                if(effect.options.scheduler){
+                    effect.options.scheduler(effect)
+                }else{
+                    effect()
+                }
+            })
+        }
+        let activeEffect
+        let  effectStack = []
+
+        function createEffect(fn,options={}){
+            const effectFn = () =>{
+                cleanup(effectFn)
+                activeEffect= effectFn
+                effectStack.push(effectFn)
+                const res = fn()
+                effectStack.pop()
+                activeEffect = effectStack[effectStack.length -1]
+                return res
+            }
+            effectFn.deps = []
+            effectFn.options = options
+            if(!options.lazy){
+                return effectFn()
+            }
+            return effectFn
+        }
+
+        function cleanup(effectFn){
+            effectFn.deps.forEach(deps=>{
+                deps.delete(effectFn)
+            })
+            effectFn.deps.length = []
+        }
+
+        function traverse(source,seen = new Set()){
+            if(typeof source !=="object" || source === null || seen.has(source)){
+                return
+            }
+            seen.add(source)
+            for(let key in source){
+                traverse(source[key],seen)
+            }
+            return source
+        }
+
+        function watch(source,cb,options={}){
+            let newVal, oldVal,getter
+            if(typeof source === "function"){
+                getter = source
+            }else{
+                getter = () => traverse(source)
+            }
+            
+            const job = () =>{
+                newVal  = effectFn()
+                cb(oldVal,newVal)
+                oldVal = newVal
+            }
+
+            const effectFn = createEffect(()=> getter(),{
+                lazy:true,
+                scheduler:() =>{
+                    if(options.flusg ==="post"){
+                        const p = Promise.resolve()
+                        p.then(job)
+                    }else{
+                        job()
+                    }
+                }
+            })
+            if(options.immediate){
+                job()
+            }else{
+                oldVal = effectFn()
+            }
+        }
+
+        watch(()=>obj.name,(oldVal,newVal)=>{
+            document.body.innerText = `旧值：${oldVal}, 新值：${newVal}`
+        },{
+            immediate:true,
+            flush:"post"
+        })
+
+        setTimeout(()=>{
+            obj.name="细锋"
+        },3000)
+
+    </script>
+</body>
+</html>
