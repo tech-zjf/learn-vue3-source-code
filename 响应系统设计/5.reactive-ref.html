@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <script>
+
+        const data = {
+            msg:'这是一段文本啊'
+        }
+
+        const str = "这是一段字符串啊"
+        
+        function reactive(o){
+            return new Proxy(o,{
+                get(target,key){
+                    return target[key]
+
+                },
+                set(target,key,newVal){
+                    target[key] = newVal
+                }
+            })
+        }
+
+        function  ref(v){
+            const wrapper ={
+                value:v
+            }
+            // __v_isRef定义一个属性用来标记当前是原始值，
+           Object.defineProperty(wrapper, '__v_isRef', {
+               value: true
+            })
+            return reactive(wrapper)
+        }
+
+    </script>
+    
+</body>
+</html>
